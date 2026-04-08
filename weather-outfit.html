@@ -716,7 +716,7 @@ async function fetchLaxusOutfits() {
   if (!section) return;
 
   try {
-    const res = await fetch('laxus-proxy.php');
+    const res = await fetch('https://laxus-proxy.anbaru-yasu.workers.dev/');
 
     // HTTPエラー（502, 404 等）はJSONのエラーメッセージを取り出す
     if (!res.ok) {
