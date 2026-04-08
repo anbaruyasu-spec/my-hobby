@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>今日の天気と服装提案</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: background 0.8s ease;
+    }
+    body.rainy  { background: linear-gradient(135deg, #636e72 0%, #2d3436 100%); }
+    body.cloudy { background: linear-gradient(135deg, #b2bec3 0%, #636e72 100%); }
+    body.sunny  { background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%); }
+    body.snowy  { background: linear-gradient(135deg, #dfe6e9 0%, #74b9ff 100%); }
+    body.thunder{ background: linear-gradient(135deg, #2d3436 0%, #6c5ce7 100%); }
+
+    /* ---- メインカード ---- */
+    .card {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 28px;
+      padding: 40px 36px;
+      max-width: 480px;
+      width: 100%;
+      color: #fff;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+
+    .location { font-size: 14px; opacity: 0.8; margin-bottom: 6px; }
+    .date-text { font-size: 15px; opacity: 0.75; margin-bottom: 24px; }
+
+    .weather-main { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+    .weather-icon { font-size: 72px; line-height: 1; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2)); }
+    .temp-block { flex: 1; }
+    .temp { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -2px; }
+    .temp sup { font-size: 28px; font-weight: 400; vertical-align: super; }
+    .weather-desc { font-size: 18px; opacity: 0.9; margin-top: 4px; }
+    .temp-range { font-size: 14px; opacity: 0.75; margin-bottom: 20px; padding-left: 88px; }
+
+    .details { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    .detail-item { background: rgba(255,255,255,0.12); border-radius: 16px; padding: 12px 10px; text-align: center; }
+    .detail-label { font-size: 11px; opacity: 0.7; margin-bottom: 4px; }
+    .detail-value { font-size: 18px; font-weight: 600; }
+    .detail-unit { font-size: 11px; font-weight: 400; }
+
+    .divider { border: none; border-top: 1px solid rgba(255,255,255,0.25); margin-bottom: 22px; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .outfit-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      opacity: 0.7;
+    }
+
+    .outfit-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.25);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 14px;
+      margin: 4px 4px 4px 0;
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .outfit-advice {
+      margin-top: 14px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 14px 16px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .outfit-advice strong { display: block; margin-bottom: 4px; font-size: 15px; }
+
+    .update-time { text-align: right; font-size: 11px; opacity: 0.5; margin-top: 18px; }
+
+    /* ---- ローディング / エラー ---- */
+    .loading { text-align: center; padding: 40px 0; }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 0 auto 16px;
+    }
+    .spinner-sm {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      background: rgba(255,80,80,0.25);
+      border: 1px solid rgba(255,100,100,0.4);
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-top: 10px;
+    }
+    .retry-btn {
+      margin-top: 16px;
+      background: rgba(255,255,255,0.25);
+      border: 1px solid rgba(255,255,255,0.5);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .retry-btn:hover { background: rgba(255,255,255,0.4); }
+
+    /* ---- Laxus コーデセクション ---- */
+    .laxus-scroll {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 10px;
+      margin: 0 -36px;
+      padding-left: 36px;
+      padding-right: 36px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.3) transparent;
+    }
+    .laxus-scroll::-webkit-scrollbar { height: 4px; }
+    .laxus-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 2px; }
+
+    .laxus-item {
+      flex: 0 0 auto;
+      width: 150px;
+      text-decoration: none;
+      color: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: transform 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+    .laxus-item:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,0.3); }
+
+    /* ランクボーダー */
+    .rank-gold   { border-color: rgba(255,210,60,0.85) !important; box-shadow: 0 0 0 1px rgba(255,210,60,0.3); }
+    .rank-silver { border-color: rgba(192,210,230,0.85) !important; }
+    .rank-bronze { border-color: rgba(205,140,80,0.85) !important; }
+
+    .rank-badge {
+      position: absolute;
+      top: 6px; left: 6px;
+      border-radius: 8px;
+      padding: 2px 6px;
+      font-size: 13px;
+      font-weight: 700;
+      z-index: 2;
+      line-height: 1.4;
+      background: rgba(0,0,0,0.45);
+    }
+
+    .laxus-img { width: 100%; height: 150px; object-fit: cover; display: block; }
+
+    .ai-score-bar { height: 3px; background: rgba(255,255,255,0.12); }
+    .ai-score-fill {
+      height: 100%;
+      background: linear-gradient(90deg, rgba(255,255,255,0.35), rgba(255,255,255,0.75));
+      transition: width 0.6s ease;
+    }
+
+    .laxus-label {
+      font-size: 11px;
+      padding: 6px 8px 4px;
+      line-height: 1.4;
+      opacity: 0.85;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .ai-comment {
+      font-size: 10px;
+      padding: 0 8px 7px;
+      line-height: 1.4;
+      opacity: 0.65;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .ai-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      padding: 3px 9px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      white-space: nowrap;
+    }
+    .ai-status-badge.done {
+      background: rgba(80,210,120,0.18);
+      border-color: rgba(80,210,120,0.35);
+    }
+    .ai-status-badge.error {
+      background: rgba(255,80,80,0.15);
+      border-color: rgba(255,80,80,0.3);
+    }
+
+    .laxus-info-row {
+      font-size: 13px;
+      opacity: 0.7;
+      padding: 10px 0 6px;
+    }
+    .laxus-credit { text-align: right; font-size: 10px; opacity: 0.4; margin-top: 8px; }
+    .laxus-credit a { color: inherit; text-decoration: none; }
+
+    /* ---- 設定ボタン ---- */
+    .settings-btn {
+      position: fixed;
+      top: 18px; right: 18px;
+      width: 40px; height: 40px;
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      transition: background 0.2s;
+      line-height: 1;
+    }
+    .settings-btn:hover { background: rgba(255,255,255,0.32); }
+
+    /* ---- 設定パネル ---- */
+    .settings-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .settings-overlay.open { display: flex; }
+
+    .settings-panel {
+      background: rgba(18,20,32,0.96);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 22px;
+      padding: 30px 26px;
+      width: 100%;
+      max-width: 380px;
+      color: #fff;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+    .settings-panel h2 { font-size: 16px; margin-bottom: 6px; }
+    .settings-subtitle { font-size: 12px; opacity: 0.5; margin-bottom: 22px; line-height: 1.5; }
+
+    .settings-label { font-size: 12px; opacity: 0.65; margin-bottom: 7px; display: block; }
+    .settings-input {
+      width: 100%;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 11px;
+      color: #fff;
+      padding: 11px 13px;
+      font-size: 13px;
+      font-family: 'Menlo', 'Monaco', monospace;
+      outline: none;
+      margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+    .settings-input:focus { border-color: rgba(255,255,255,0.45); }
+    .settings-input::placeholder { color: rgba(255,255,255,0.25); }
+
+    .settings-note {
+      font-size: 11px;
+      opacity: 0.4;
+      line-height: 1.6;
+      margin-bottom: 22px;
+    }
+    .settings-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.6);
+      padding: 9px 18px;
+      border-radius: 11px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.08); }
+    .btn-primary {
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.35);
+      color: #fff;
+      padding: 9px 20px;
+      border-radius: 11px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: rgba(255,255,255,0.3); }
+    .btn-clear {
+      background: rgba(255,60,60,0.12);
+      border: 1px solid rgba(255,80,80,0.25);
+      color: rgba(255,150,150,0.9);
+      padding: 9px 16px;
+      border-radius: 11px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-right: auto;
+      transition: background 0.2s;
+    }
+    .btn-clear:hover { background: rgba(255,60,60,0.22); }
+  </style>
+</head>
+<body class="sunny">
+
+<!-- 設定ボタン -->
+<button class="settings-btn" onclick="openSettings()" title="Anthropic API キー設定">⚙</button>
+
+<!-- 設定パネル -->
+<div class="settings-overlay" id="settings-overlay" onclick="handleOverlayClick(event)">
+  <div class="settings-panel" onclick="event.stopPropagation()">
+    <h2>🤖 AI コーデ分析の設定</h2>
+    <p class="settings-subtitle">
+      Anthropic API キーを登録すると、取得したコーデ画像を Claude が気温に合わせてランキングします。
+    </p>
+    <label class="settings-label" for="settings-key-input">Anthropic API キー</label>
+    <input
+      class="settings-input"
+      id="settings-key-input"
+      type="password"
+      placeholder="sk-ant-..."
+      autocomplete="off"
+      spellcheck="false"
+    >
+    <p class="settings-note">
+      キーはブラウザの localStorage にのみ保存され、外部には送信されません。<br>
+      使用モデル：claude-haiku-4-5（高速・低コスト）
+    </p>
+    <div class="settings-actions">
+      <button class="btn-clear" onclick="clearApiKey()">削除</button>
+      <button class="btn-secondary" onclick="closeSettings()">キャンセル</button>
+      <button class="btn-primary" onclick="applySettings()">保存して閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- メインカード -->
+<div class="card">
+  <div id="app">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>位置情報を取得中...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// グローバル状態
+// ============================================================
+let weatherContext = null; // { temp, feels, desc }
+
+// ============================================================
+// API キー管理
+// ============================================================
+function getApiKey()      { return localStorage.getItem('anthropic_api_key') || ''; }
+function saveApiKey(key)  { localStorage.setItem('anthropic_api_key', key.trim()); }
+function removeApiKey()   { localStorage.removeItem('anthropic_api_key'); }
+
+// ============================================================
+// 設定パネル
+// ============================================================
+function openSettings() {
+  document.getElementById('settings-key-input').value = getApiKey();
+  document.getElementById('settings-overlay').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('open');
+}
+function handleOverlayClick(e) {
+  if (e.target === e.currentTarget) closeSettings();
+}
+function applySettings() {
+  const key = document.getElementById('settings-key-input').value.trim();
+  saveApiKey(key);
+  closeSettings();
+}
+function clearApiKey() {
+  removeApiKey();
+  document.getElementById('settings-key-input').value = '';
+  closeSettings();
+}
+
+// ============================================================
+// 天気コード → アイコン・説明・背景クラス
+// ============================================================
+function interpretWeatherCode(code) {
+  if (code === 0)  return { icon: '☀️', desc: '快晴',         bg: 'sunny' };
+  if (code <= 2)   return { icon: '🌤️', desc: '晴れ時々曇り', bg: 'sunny' };
+  if (code === 3)  return { icon: '☁️', desc: '曇り',         bg: 'cloudy' };
+  if (code <= 49)  return { icon: '🌫️', desc: '霧',           bg: 'cloudy' };
+  if (code <= 55)  return { icon: '🌦️', desc: '霧雨',         bg: 'rainy' };
+  if (code <= 67)  return { icon: '🌧️', desc: '雨',           bg: 'rainy' };
+  if (code <= 77)  return { icon: '❄️', desc: '雪',           bg: 'snowy' };
+  if (code <= 82)  return { icon: '🌧️', desc: 'にわか雨',     bg: 'rainy' };
+  if (code <= 86)  return { icon: '🌨️', desc: 'にわか雪',     bg: 'snowy' };
+  if (code <= 99)  return { icon: '⛈️', desc: '雷雨',         bg: 'thunder' };
+  return                  { icon: '🌡️', desc: '不明',         bg: 'cloudy' };
+}
+
+// ============================================================
+// 気温・天気 → 服装アドバイス
+// ============================================================
+function getOutfitAdvice(temp, weatherCode) {
+  const isRainy = (weatherCode >= 50 && weatherCode <= 67) || (weatherCode >= 80 && weatherCode <= 82) || weatherCode >= 95;
+  const isSnowy = (weatherCode >= 68 && weatherCode <= 77) || (weatherCode >= 83 && weatherCode <= 86);
+  let items, advice, title;
+
+  if      (temp >= 30) { title='猛暑日の装い';        items=['半袖Tシャツ','短パン or 薄手パンツ','サンダル or スニーカー','帽子','サングラス'];            advice='非常に暑い一日。熱中症に注意しこまめに水分補給を。日焼け止めも必携。'; }
+  else if (temp >= 25) { title='夏日の装い';           items=['半袖シャツ','薄手のパンツ or スカート','スニーカー','帽子'];                                    advice='暑く感じます。通気性の良い素材を選びましょう。朝晩は少し涼しくなることも。'; }
+  else if (temp >= 20) { title='過ごしやすい気温の装い'; items=['長袖シャツ or 薄手ブラウス','薄手カーディガン（朝晩用）','チノパン or スカート','スニーカー']; advice='快適な気温です。朝晩に備えて羽織れるものを一枚。'; }
+  else if (temp >= 15) { title='春秋らしい装い';       items=['長袖シャツ','薄手ジャケット or パーカー','デニム or チノパン','スニーカー'];                    advice='少し肌寒く感じることも。重ね着が便利です。'; }
+  else if (temp >= 10) { title='肌寒い日の装い';       items=['厚手長袖シャツ','セーター or ニット','ジャケット or コート','デニムパンツ','ブーツ'];           advice='アウターは必須。インナーを厚めにして体温調節を。'; }
+  else if (temp >= 5)  { title='寒い日の装い';         items=['ヒートテック等インナー','厚手ニット or フリース','コート or ダウン','厚手パンツ','マフラー','ブーツ']; advice='かなり寒いです。マフラーや手袋も活躍します。'; }
+  else                 { title='厳寒の装い';           items=['ヒートテック厚手','フリース or 厚手ニット','防寒コート or ダウン','裏起毛パンツ','マフラー・手袋・帽子','ブーツ']; advice='非常に寒い一日。防寒を万全に。'; }
+
+  if (isRainy) items.push(temp >= 25 ? '折り畳み傘 ☂️' : '傘 ☂️');
+  if (isSnowy) items.push('防水ブーツ・滑り止め対策');
+  return { title, items, advice };
+}
+
+// ============================================================
+// 逆ジオコーディング
+// ============================================================
+async function getLocationName(lat, lon) {
+  try {
+    const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=ja`, { headers: { 'User-Agent': 'weather-outfit-app/1.0' } });
+    const data = await res.json();
+    const a    = data.address;
+    return a.city || a.town || a.village || a.county || a.state || '現在地';
+  } catch { return '現在地'; }
+}
+
+// ============================================================
+// 天気取得
+// ============================================================
+async function fetchWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    + `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m`
+    + `&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('天気APIエラー');
+  return res.json();
+}
+
+// ============================================================
+// ユーティリティ
+// ============================================================
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatDate(d) {
+  const days = ['日','月','火','水','木','金','土'];
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+}
+
+// ============================================================
+// UI 描画：天気セクション
+// ============================================================
+function renderWeather(weather, locationName) {
+  const cur   = weather.current;
+  const daily = weather.daily;
+  const code  = cur.weather_code;
+  const temp  = Math.round(cur.temperature_2m);
+  const feels = Math.round(cur.apparent_temperature);
+  const maxT  = Math.round(daily.temperature_2m_max[0]);
+  const minT  = Math.round(daily.temperature_2m_min[0]);
+  const humid = cur.relative_humidity_2m;
+  const wind  = Math.round(cur.wind_speed_10m);
+  const precip = cur.precipitation;
+
+  const { icon, desc, bg } = interpretWeatherCode(code);
+  const outfit = getOutfitAdvice(temp, code);
+  document.body.className = bg;
+
+  // 天気コンテキストを保存（AI分析で使用）
+  weatherContext = { temp, feels, desc };
+
+  const now = new Date();
+  const updateStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} 更新`;
+
+  document.getElementById('app').innerHTML = `
+    <div class="location">📍 ${escHtml(locationName)}</div>
+    <div class="date-text">${formatDate(now)}</div>
+
+    <div class="weather-main">
+      <div class="weather-icon">${icon}</div>
+      <div class="temp-block">
+        <div class="temp">${temp}<sup>°C</sup></div>
+        <div class="weather-desc">${desc}</div>
+      </div>
+    </div>
+    <div class="temp-range">体感 ${feels}°C &nbsp;|&nbsp; 最高 ${maxT}°C / 最低 ${minT}°C</div>
+
+    <div class="details">
+      <div class="detail-item">
+        <div class="detail-label">💧 湿度</div>
+        <div class="detail-value">${humid}<span class="detail-unit">%</span></div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">💨 風速</div>
+        <div class="detail-value">${wind}<span class="detail-unit">km/h</span></div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">☔ 降水量</div>
+        <div class="detail-value">${precip}<span class="detail-unit">mm</span></div>
+      </div>
+    </div>
+
+    <hr class="divider">
+    <div class="section-header">
+      <div class="outfit-title">👗 今日の服装提案</div>
+    </div>
+    <div>
+      ${outfit.items.map(i => `<span class="outfit-badge">${i}</span>`).join('')}
+    </div>
+    <div class="outfit-advice">
+      <strong>${escHtml(outfit.title)}</strong>
+      ${escHtml(outfit.advice)}
+    </div>
+
+    <div class="update-time">${updateStr}</div>
+
+    <div id="laxus-section">
+      <hr class="divider">
+      <div class="section-header">
+        <div class="outfit-title">👜 Laxus 今日のコーデ</div>
+      </div>
+      <div class="laxus-info-row"><span class="spinner-sm"></span> コーデ画像を取得中...</div>
+    </div>
+  `;
+
+  fetchLaxusOutfits();
+}
+
+// ============================================================
+// Laxus コーデ表示（ランク有無の両方に対応）
+// ============================================================
+function renderLaxusSection(outfits, isRanked) {
+  const section = document.getElementById('laxus-section');
+  if (!section) return;
+
+  const LAXUS_URL = 'https://laxus.co/app/pc/blog/outfit';
+  const medals    = ['🥇','🥈','🥉'];
+  const rankBorderClass = ['rank-gold','rank-silver','rank-bronze'];
+
+  const items = outfits.map(o => {
+    const rank       = o.rank ?? null;
+    const borderCls  = isRanked && rank && rankBorderClass[rank-1] ? rankBorderClass[rank-1] : '';
+    const medalHtml  = isRanked && rank ? `<div class="rank-badge">${medals[rank-1] ?? rank+'位'}</div>` : '';
+    const scoreHtml  = isRanked && o.score != null
+      ? `<div class="ai-score-bar"><div class="ai-score-fill" style="width:${o.score}%"></div></div>`
+      : '';
+    const commentHtml = isRanked && o.comment
+      ? `<div class="ai-comment">${escHtml(o.comment)}</div>` : '';
+    const labelHtml   = o.alt ? `<div class="laxus-label">${escHtml(o.alt)}</div>` : '';
+
+    return `
+      <a class="laxus-item ${borderCls}" href="${escHtml(o.href)}" target="_blank" rel="noopener noreferrer">
+        ${medalHtml}
+        <img class="laxus-img" src="${escHtml(o.src)}" alt="${escHtml(o.alt)}" loading="lazy"
+             onerror="this.style.display='none'">
+        ${scoreHtml}
+        ${labelHtml}
+        ${commentHtml}
+      </a>`;
+  }).join('');
+
+  const hasKey = !!getApiKey();
+  let badgeHtml = '';
+  if (isRanked) {
+    badgeHtml = '<span class="ai-status-badge done">✦ AI分析済み</span>';
+  } else if (hasKey) {
+    badgeHtml = '<span class="ai-status-badge" id="ai-status-badge"><span class="spinner-sm"></span> AI分析中...</span>';
+  }
+
+  section.innerHTML = `
+    <hr class="divider">
+    <div class="section-header">
+      <div class="outfit-title">👜 Laxus 今日のコーデ</div>
+      ${badgeHtml}
+    </div>
+    <div class="laxus-scroll">${items}</div>
+    <div class="laxus-credit">
+      画像提供：<a href="${LAXUS_URL}" target="_blank" rel="noopener noreferrer">Laxus</a>
+      ${isRanked ? '&nbsp;/&nbsp; ランキング：Claude AI' : ''}
+    </div>`;
+}
+
+// ============================================================
+// Claude API でコーデをランキング
+// ============================================================
+async function rankOutfitsWithClaude(outfits) {
+  const apiKey = getApiKey();
+  if (!apiKey || !weatherContext || outfits.length === 0) return null;
+
+  const { temp, feels, desc } = weatherContext;
+  const n = outfits.length;
+
+  const prompt =
+    `今日の気温は${temp}°C（体感${feels}°C、天気：${desc}）です。\n` +
+    `添付した${n}枚のコーデ画像（画像1〜${n}の順）を、今日の気温・天気への適合度で評価してください。\n\n` +
+    `必ず以下のJSON形式のみで返答してください（前後に余分なテキスト不要）:\n` +
+    `{"ranking":[最適な順の画像番号(1始まり)],"scores":{"1":0~100スコア,...},"comments":{"1":"日本語で20字以内のひとことコメント",...}}`;
+
+  const content = [
+    { type: 'text', text: prompt },
+    ...outfits.map(o => ({
+      type: 'image',
+      source: { type: 'url', url: o.src }
+    }))
+  ];
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-allow-browser': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content }]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `APIエラー (${res.status})`);
+  }
+
+  const data    = await res.json();
+  const text    = data.content[0]?.text ?? '';
+  const matched = text.match(/\{[\s\S]*\}/);
+  if (!matched) throw new Error('レスポンスのJSON解析に失敗しました');
+
+  const result = JSON.parse(matched[0]);
+
+  // ランキング順に outfits を並べ替え、rank/score/comment を付与
+  const ranked = [];
+  for (let rank = 0; rank < result.ranking.length; rank++) {
+    const num = result.ranking[rank];   // 1始まり
+    const idx = num - 1;
+    if (idx < 0 || idx >= outfits.length) continue;
+    ranked.push({
+      ...outfits[idx],
+      rank:    rank + 1,
+      score:   result.scores?.[String(num)]   ?? null,
+      comment: result.comments?.[String(num)] ?? ''
+    });
+  }
+
+  // ranking に含まれなかった画像を末尾に追加
+  const rankedIndices = new Set(result.ranking.map(n => n - 1));
+  outfits.forEach((o, i) => {
+    if (!rankedIndices.has(i)) ranked.push({ ...o, rank: null, score: null, comment: '' });
+  });
+
+  return ranked;
+}
+
+// ============================================================
+// Laxus コーデ取得
+// ============================================================
+async function fetchLaxusOutfits() {
+  const section = document.getElementById('laxus-section');
+  if (!section) return;
+
+  try {
+    const res = await fetch('laxus-proxy.php');
+
+    // HTTPエラー（502, 404 等）はJSONのエラーメッセージを取り出す
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `サーバーエラー (HTTP ${res.status})`);
+    }
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const outfits = data.outfits ?? [];
+    if (outfits.length === 0) {
+      throw new Error('コーデ画像が見つかりませんでした');
+    }
+
+    renderLaxusSection(outfits, false);
+
+    if (getApiKey()) {
+      try {
+        const ranked = await rankOutfitsWithClaude(outfits);
+        if (ranked) renderLaxusSection(ranked, true);
+      } catch (e) {
+        const badge = document.getElementById('ai-status-badge');
+        if (badge) {
+          badge.className = 'ai-status-badge error';
+          badge.textContent = '⚠ AI分析失敗: ' + e.message;
+        }
+      }
+    }
+
+  } catch (e) {
+    section.innerHTML = `
+      <hr class="divider">
+      <div class="section-header"><div class="outfit-title">👜 Laxus 今日のコーデ</div></div>
+      <div class="error-msg" style="margin-top:0">
+        コーデ画像の取得に失敗しました。<br>
+        <span style="font-size:12px;opacity:0.75">${escHtml(e.message)}</span>
+      </div>`;
+  }
+}
+
+// ============================================================
+// エラー / ローディング
+// ============================================================
+function renderError(msg) {
+  document.getElementById('app').innerHTML = `
+    <div style="text-align:center;padding:20px 0">
+      <div style="font-size:48px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">取得できませんでした</div>
+      <div class="error-msg">${escHtml(msg)}</div>
+      <button class="retry-btn" onclick="startApp()">再試行</button>
+    </div>`;
+}
+function setLoading(msg) {
+  document.getElementById('app').innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>${escHtml(msg)}</p>
+    </div>`;
+}
+
+// ============================================================
+// メイン
+// ============================================================
+async function startApp() {
+  document.body.className = 'sunny';
+  setLoading('位置情報を取得中...');
+
+  if (!navigator.geolocation) {
+    renderError('このブラウザは位置情報に対応していません。');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async ({ coords: { latitude: lat, longitude: lon } }) => {
+      try {
+        setLoading('天気データを取得中...');
+        const [weather, locationName] = await Promise.all([
+          fetchWeather(lat, lon),
+          getLocationName(lat, lon)
+        ]);
+        renderWeather(weather, locationName);
+      } catch (e) {
+        renderError(`天気の取得に失敗しました。\n${e.message}`);
+      }
+    },
+    (err) => {
+      const msgs = {
+        1: '位置情報の利用が拒否されました。ブラウザの設定で許可してください。',
+        2: '位置情報を取得できませんでした。',
+        3: '位置情報の取得がタイムアウトしました。',
+      };
+      renderError(msgs[err.code] || '位置情報エラーが発生しました。');
+    },
+    { timeout: 10000, enableHighAccuracy: false }
+  );
+}
+
+startApp();
+</script>
+</body>
+</html>
