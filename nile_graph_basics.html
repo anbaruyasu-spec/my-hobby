@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>需要曲線の基本 — ナイル社ケース</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background: #f9f8f6; color: #1a1a18; padding: 24px 16px; }
+  .container { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 20px; color: #1a1a18; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .step-btn {
+    padding: 8px 14px; border: 1px solid #ccc; border-radius: 8px;
+    background: transparent; color: #666; font-size: 13px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .step-btn.active { background: #e6f1fb; color: #185fa5; border-color: transparent; font-weight: 500; }
+  .step-btn:hover:not(.active) { background: #f1efe8; }
+  .explain-box {
+    border-radius: 8px; padding: 14px 16px; font-size: 14px;
+    line-height: 1.8; margin-bottom: 16px; background: #f1efe8;
+    border-left: 3px solid #378ADD;
+  }
+  .chart-wrap {
+    position: relative; width: 100%; height: 300px;
+    background: #fff; border-radius: 10px; border: 1px solid #e0dfd8; padding: 8px;
+  }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: #666; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-line { width: 20px; height: 3px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>需要曲線の基本 — ナイル社ケース</h1>
+
+  <div class="tabs">
+    <button class="step-btn active" onclick="goStep(0)">① 需要曲線</button>
+    <button class="step-btn" onclick="goStep(1)">② 限界費用 MC</button>
+    <button class="step-btn" onclick="goStep(2)">③ 限界収入 MR</button>
+    <button class="step-btn" onclick="goStep(3)">③ MRのなぜ？</button>
+    <button class="step-btn" onclick="goStep(4)">④ 全部合わせる</button>
+  </div>
+
+  <div id="explain" class="explain-box"></div>
+
+  <div class="chart-wrap">
+    <canvas id="myC" role="img" aria-label="需要曲線・MR・MCグラフ"></canvas>
+  </div>
+
+  <div id="leg" class="legend"></div>
+</div>
+
+<script>
+const STEPS = [
+  {
+    text: '🔵 <b>需要曲線</b>とは「価格が高いほど買う人が減る」を線にしたもの。<br>このケースでは P = 20 − Q。<br>→ 価格が20なら誰も買わない（Q=0）、価格が0ならQ=20まで買う。',
+    d:[1,0,0], pts:[]
+  },
+  {
+    text: '🟢 <b>限界費用（MC）</b>とは「1個多く作るのにかかる費用」。<br>ナイル社はどれだけ作っても1個あたりコスト＝8（一定）。<br>→「この線より高く売れれば儲かる」というボーダーライン。',
+    d:[1,1,0], pts:[]
+  },
+  {
+    text: '🔴 <b>限界収入（MR）</b>とは「1個多く売ったときに増える収入」。<br>独占企業は「もう1個売りたいなら全体の価格を下げる必要がある」。<br>だから追加収入は価格より少なく、MRは需要曲線より急な傾きになる。',
+    d:[1,1,1], pts:[]
+  },
+  {
+    text: '🔴 <b>MRがなぜ急なのか？（直感）</b><br>Q=5のとき P=15 → 売上合計＝75<br>Q=6にするには P=14に下げる → 売上合計＝84<br>増えた収入 = 84−75 = <b>9</b>（でも価格は14）<br>→ 価格14で売っているのに、追加収入は9しかない。これがMR。',
+    d:[1,1,1], pts:[{x:5,y:15,c:'#378ADD'},{x:6,y:9,c:'#D85A30'}]
+  },
+  {
+    text: '✅ <b>まとめ：3本の線の意味</b><br>青：需要曲線 → 買い手が何個買うかを示す<br>緑（破線）：MC＝8 → 1個作るコスト（赤字ラインのボーダー）<br>赤：MR → 1個多く売ったときの追加収入<br><br>👉 <b>利益最大化 ＝ MR と MC が交わる点</b>（Q=6）',
+    d:[1,1,1], pts:[{x:6,y:8,c:'#E24B4A'}]
+  }
+];
+
+let chart = null;
+
+function goStep(idx) {
+  document.querySelectorAll('.step-btn').forEach((b,i) => b.classList.toggle('active', i===idx));
+  const s = STEPS[idx];
+  document.getElementById('explain').innerHTML = s.text;
+
+  const qs = Array.from({length:21},(_,i)=>i);
+  chart.data.datasets[0].data = s.d[0] ? qs.map(q=>({x:q,y:20-q})) : [];
+  chart.data.datasets[1].data = s.d[1] ? [{x:0,y:8},{x:20,y:8}] : [];
+  chart.data.datasets[2].data = s.d[2] ? qs.filter(q=>20-2*q>=0).map(q=>({x:q,y:20-2*q})) : [];
+  chart.data.datasets[3].data = s.pts.map(p=>({x:p.x,y:p.y}));
+  chart.data.datasets[3].pointBackgroundColor = s.pts.map(p=>p.c);
+  chart.update('none');
+
+  const items = [];
+  if(s.d[0]) items.push({c:'#378ADD',l:'需要曲線 D'});
+  if(s.d[1]) items.push({c:'#1D9E75',l:'限界費用 MC=8（破線）'});
+  if(s.d[2]) items.push({c:'#D85A30',l:'限界収入 MR'});
+  document.getElementById('leg').innerHTML = items.map(it =>
+    `<span class="legend-item"><span class="legend-line" style="background:${it.c}"></span>${it.l}</span>`
+  ).join('');
+}
+
+window.addEventListener('load', () => {
+  const ctx = document.getElementById('myC').getContext('2d');
+  chart = new Chart(ctx, {
+    type:'scatter',
+    data:{
+      datasets:[
+        {data:[],borderColor:'#378ADD',fill:false,showLine:true,borderWidth:2.5,pointRadius:0},
+        {data:[],borderColor:'#1D9E75',fill:false,showLine:true,borderWidth:2,pointRadius:0,borderDash:[6,3]},
+        {data:[],borderColor:'#D85A30',fill:false,showLine:true,borderWidth:2.5,pointRadius:0},
+        {data:[],showLine:false,pointRadius:9,pointBackgroundColor:'#E24B4A',borderColor:'transparent'}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>`(Q=${Math.round(c.parsed.x)}, P=${Math.round(c.parsed.y)})`}}},
+      scales:{
+        x:{min:0,max:20,title:{display:true,text:'Q（数量）',font:{size:12},color:'#888'},ticks:{color:'#888'},grid:{color:'rgba(0,0,0,0.06)'}},
+        y:{min:0,max:22,title:{display:true,text:'P（価格）',font:{size:12},color:'#888'},ticks:{color:'#888'},grid:{color:'rgba(0,0,0,0.06)'}}
+      }
+    }
+  });
+  goStep(0);
+});
+</script>
+</body>
+</html>
