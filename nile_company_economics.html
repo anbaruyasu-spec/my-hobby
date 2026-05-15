@@ -1,0 +1,141 @@
+
+<h2 class="sr-only">ナイル社 消費財A 価格設定分析 — 4つのシナリオ比較</h2>
+
+<style>
+.tab-btn { padding: 8px 14px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-secondary); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.tab-btn.active { background: var(--color-background-info); color: var(--color-text-info); border-color: transparent; font-weight: 500; }
+.metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 16px; text-align: center; }
+.metric-label { font-size: 12px; color: var(--color-text-secondary); margin: 0 0 4px; }
+.metric-value { font-size: 22px; font-weight: 500; color: var(--color-text-primary); margin: 0; }
+.metric-sub { font-size: 11px; color: var(--color-text-secondary); margin: 2px 0 0; }
+.scenario-desc { font-size: 13px; color: var(--color-text-secondary); background: var(--color-background-secondary); padding: 10px 14px; border-radius: var(--border-radius-md); border-left: 2px solid #378ADD; margin-bottom: 16px; line-height: 1.6; }
+</style>
+
+<div style="padding: 1rem 0;">
+  <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+    <button class="tab-btn active" onclick="setScenario(0)">設問1: 直接販売</button>
+    <button class="tab-btn" onclick="setScenario(1)">設問2: 代理店1社</button>
+    <button class="tab-btn" onclick="setScenario(2)">設問3: 代理店2社</button>
+    <button class="tab-btn" onclick="setScenario(3)">設問4: 供給者2社</button>
+  </div>
+
+  <div id="desc" class="scenario-desc"></div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px;">
+    <div class="metric"><p class="metric-label">小売価格</p><p class="metric-value" id="m-retail">—</p><p class="metric-sub">price (P*)</p></div>
+    <div class="metric"><p class="metric-label">卸し価格</p><p class="metric-value" id="m-wholesale">—</p><p class="metric-sub">wholesale (w)</p></div>
+    <div class="metric"><p class="metric-label">販売量</p><p class="metric-value" id="m-qty">—</p><p class="metric-sub">quantity (Q*)</p></div>
+    <div class="metric"><p class="metric-label">ナイル社の利益</p><p class="metric-value" id="m-profit">—</p><p class="metric-sub">producer surplus</p></div>
+  </div>
+
+  <div style="position: relative; width: 100%; height: 320px;">
+    <canvas id="chart" role="img" aria-label="需要曲線・限界収入・限界費用と均衡点のグラフ"></canvas>
+  </div>
+
+  <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--color-text-secondary);">
+    <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 20px; height: 3px; background: #378ADD; display: inline-block;"></span>需要曲線 (D)</span>
+    <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 20px; height: 3px; background: #D85A30; display: inline-block;"></span>限界収入 (MR)</span>
+    <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 20px; height: 3px; background: #1D9E75; display: inline-block; border-bottom: 2px dashed #1D9E75;"></span>限界費用 MC=8</span>
+    <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #E24B4A; display: inline-block;"></span>最適点</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const scenarios = [
+  {
+    label: "設問1: ナイル社が直接小売",
+    desc: "ナイル社が直接消費者に販売。MR = MC → 20-2Q = 8 → Q=6, P=14。独占企業の利益最大化。",
+    retail: 14, wholesale: 14, qty: 6, profit: 36,
+    mrSlope: 2,
+    note: "卸し価格 = 小売価格（直販）"
+  },
+  {
+    label: "設問2: 販売代理店1社",
+    desc: "ナイル社（上流）→ 代理店（下流）の二重マージン問題。代理店もMR=MCで最適化するため、両社が利益を抜くと価格が高く・量が少なくなる。",
+    retail: 17, wholesale: 14, qty: 3, profit: 18,
+    mrSlope: 4,
+    note: "二重の余剰（double marginalization）"
+  },
+  {
+    label: "設問3: 販売代理店2社（競争）",
+    desc: "代理店2社がベルトラン競争 → 小売価格 = 卸し価格まで低下。ナイル社は直販と同じ需要に直面。設問1と同じ最適点になる。",
+    retail: 14, wholesale: 14, qty: 6, profit: 36,
+    mrSlope: 2,
+    note: "競争により代理店利益=0"
+  },
+  {
+    label: "設問4: 供給者2社 + 代理店1社",
+    desc: "ナイル社と同コストの供給者が参入。供給者間のベルトラン競争 → 卸し価格 = MC = 8まで低下。代理店が独占利益を得る。",
+    retail: 14, wholesale: 8, qty: 6, profit: 0,
+    mrSlope: 2,
+    note: "供給者利益=0、代理店が全利益を獲得"
+  }
+];
+
+let current = 0;
+let myChart;
+
+function buildChartData(s) {
+  const qs = Array.from({length: 21}, (_, i) => i);
+  const demand = qs.map(q => ({ x: q, y: 20 - q }));
+  const mr = qs.filter(q => 20 - s.mrSlope * q >= 0).map(q => ({ x: q, y: Math.max(0, 20 - s.mrSlope * q) }));
+  const mc = [{ x: 0, y: 8 }, { x: 20, y: 8 }];
+  const eq = [{ x: s.qty, y: 0 }, { x: s.qty, y: s.retail }];
+  const eqPrice = [{ x: 0, y: s.retail }, { x: s.qty, y: s.retail }];
+  return { demand, mr, mc, eq, eqPrice };
+}
+
+function setScenario(idx) {
+  current = idx;
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  const s = scenarios[idx];
+  document.getElementById('desc').textContent = s.desc + ' (' + s.note + ')';
+  document.getElementById('m-retail').textContent = s.retail;
+  document.getElementById('m-wholesale').textContent = s.wholesale;
+  document.getElementById('m-qty').textContent = s.qty;
+  document.getElementById('m-profit').textContent = s.profit;
+
+  const d = buildChartData(s);
+  myChart.data.datasets[0].data = d.demand;
+  myChart.data.datasets[1].data = d.mr;
+  myChart.data.datasets[2].data = d.mc;
+  myChart.data.datasets[3].data = d.eq;
+  myChart.data.datasets[4].data = d.eqPrice;
+  myChart.update();
+}
+
+window.addEventListener('load', () => {
+  const ctx = document.getElementById('chart').getContext('2d');
+  const s = scenarios[0];
+  const d = buildChartData(s);
+
+  myChart = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: '需要曲線 D', data: d.demand, borderColor: '#378ADD', backgroundColor: 'transparent', showLine: true, borderWidth: 2, pointRadius: 0, tension: 0 },
+        { label: '限界収入 MR', data: d.mr, borderColor: '#D85A30', backgroundColor: 'transparent', showLine: true, borderWidth: 2, pointRadius: 0, tension: 0, borderDash: [] },
+        { label: '限界費用 MC', data: d.mc, borderColor: '#1D9E75', backgroundColor: 'transparent', showLine: true, borderWidth: 2, pointRadius: 0, tension: 0, borderDash: [6, 3] },
+        { label: '均衡数量', data: d.eq, borderColor: '#E24B4A', backgroundColor: 'transparent', showLine: true, borderWidth: 1.5, pointRadius: [0, 6], borderDash: [4, 2], pointBackgroundColor: '#E24B4A' },
+        { label: '均衡価格', data: d.eqPrice, borderColor: '#E24B4A', backgroundColor: 'transparent', showLine: true, borderWidth: 1.5, pointRadius: 0, borderDash: [4, 2] },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: {
+          label: ctx => `(Q=${Math.round(ctx.parsed.x)}, P=${Math.round(ctx.parsed.y)})`
+        }
+      }},
+      scales: {
+        x: { min: 0, max: 20, title: { display: true, text: 'Q（数量）', font: { size: 12 }, color: '#888780' }, ticks: { color: '#888780' }, grid: { color: 'rgba(136,135,128,0.15)' } },
+        y: { min: 0, max: 22, title: { display: true, text: 'P（価格）', font: { size: 12 }, color: '#888780' }, ticks: { color: '#888780' }, grid: { color: 'rgba(136,135,128,0.15)' } }
+      }
+    }
+  });
+
+  setScenario(0);
+});
+</script>
